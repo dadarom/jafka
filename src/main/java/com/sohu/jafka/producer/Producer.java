@@ -229,7 +229,8 @@ public class Producer<K, V> implements Callback, IProducer<K, V> {
 
     private ProducerPoolData<V> create(ProducerData<K, V> pd) {
         Collection<Partition> topicPartitionsList = getPartitionListForTopic(pd);
-        //FIXME: random Broker???
+        //FIXME: random Broker???  
+        //Leo: 此处也应该用Partitioner算法，要ProducerRequest来决定？只是先决定哪个Broker(有brokerId决定哪个Producer来写对应Broker的数据文件)?!
         int randomBrokerId = random.nextInt(topicPartitionsList.size());
         final Partition brokerIdPartition = new ArrayList<Partition>(topicPartitionsList).get(randomBrokerId);
         return this.producerPool.getProducerPoolData(pd.getTopic(),//

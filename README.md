@@ -30,8 +30,8 @@ You can download the full package from Google Drive:
 
 ## Contributor
 
-* @rockybean
-* @tiny657
+* [@rockybean](http://rockybean.info/search/jafka/1/)
+* [@tiny657](https://github.com/tiny657/template)
 
 ## License
 

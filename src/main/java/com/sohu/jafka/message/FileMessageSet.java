@@ -58,6 +58,12 @@ public class FileMessageSet extends MessageSet {
 
     private final AtomicLong setHighWaterMark = new AtomicLong();
 
+    /***
+     * channel,即打开一个文件，并且指明是否是mutable（可写）。
+	 * offset,读入文件的起始位置
+	 * limit，读入文件的大小
+	 * mutable,是否可写
+     */
     public FileMessageSet(FileChannel channel, long offset, long limit, //
                           boolean mutable, AtomicBoolean needRecover) throws IOException {
         super();
@@ -112,7 +118,11 @@ public class FileMessageSet extends MessageSet {
     public FileMessageSet(File file, boolean mutable, AtomicBoolean needRecover) throws IOException {
         this(Utils.openChannel(file, mutable), mutable, needRecover);
     }
-
+    
+	/***
+	 * fileChannel打开的文件即为jafka文件，其中存储着message，存储的格式与MessageSet是相同的，也是message首尾相连存储。FileMessageSet的遍历比较简单，
+	 * 顺序从channel中读取出来组装成MessageAndOffset即可，这里没有考虑Message是否压缩，原因应该是没有使用的需求。
+	 */
     public Iterator<MessageAndOffset> iterator() {
         return new IteratorTemplate<MessageAndOffset>() {
 
@@ -157,12 +167,17 @@ public class FileMessageSet extends MessageSet {
         return setSize.get();
     }
 
+    /***
+     * sendfile: zero copy
+     */
     @Override
     public long writeTo(GatheringByteChannel destChannel, long writeOffset, long maxSize) throws IOException {
         return channel.transferTo(offset + writeOffset, Math.min(maxSize, getSizeInBytes()), destChannel);
     }
 
     /**
+     * 读取指定offset到offset+limit的所有消息
+     * 
      * read message from file
      *
      * @param readOffset offset in this channel(file);not the message offset
@@ -175,11 +190,16 @@ public class FileMessageSet extends MessageSet {
                 Math.min(this.offset + readOffset + size, highWaterMark()), false, new AtomicBoolean(false));
     }
 
-    /**
+    /** 
+     * 将messages添加如当前的messageOffset
+     * 
      * Append this message to the message set
-     *
+     * 
      * @return the written size and first offset
      * @throws IOException
+     * 
+     * 将producer传递过来的messages添加到当前messageset对象(channel)中，虽然调用了writeTo方法，但是由于操作系统缓冲的存在，数据可能还没有真正写入磁盘，
+     * 而flush方法的作用便是强制写磁盘。这两个方法便完成了消息数据持久化到磁盘的操作。
      */
     public long[] append(MessageSet messages) throws IOException {
         checkMutable();

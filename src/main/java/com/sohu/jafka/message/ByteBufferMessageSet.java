@@ -114,6 +114,11 @@ public class ByteBufferMessageSet extends MessageSet{
     public ByteBuffer serialized() {
         return buffer;
     }
+    /***
+     * 一个Message可能是多条消息数据缩后构成的，所以在遍历的时候便存在一个是否要遍历压缩的Message中每条消息数据的问题，其由isShallow参数决定：true不遍历，false遍历。
+     * ByteBufferMessageSet的iterator方法是调用的是return internalIterator(false);,是会遍历包括压缩Message中的所有消息数据的。实现方式是通过topIter遍历一级Message，
+     * 当遇到压缩的Message时，将其解压缩并且用innerIter记录其遍历情况，当遍历结束后，回到topIter继续遍历。
+     */
     public Iterator<MessageAndOffset> iterator() {
         return internalIterator(false);
     }
@@ -149,7 +154,7 @@ public class ByteBufferMessageSet extends MessageSet{
                 }
                 return allDone();
             }
-            //
+            //LEO: 取每条message（4字节Size + playload）
             ByteBuffer message = topIter.slice();
             message.limit(size);
             topIter.position(topIter.position() + size);
@@ -189,6 +194,9 @@ public class ByteBufferMessageSet extends MessageSet{
 
     }
     
+    /***
+     * 将数据写入指定的channel。这里的channel是FileChannel，即该方法的调用时机是broker写数据文件
+     */
     @Override
     public long writeTo(GatheringByteChannel channel, long offset, long maxSize) throws IOException {
         buffer.mark();
