@@ -83,7 +83,7 @@ public class ProducerSendThread<T> extends Thread {
     public void run() {
         try {
             List<QueueItem<T>> remainingEvents = processEvents();
-            //handle remaining events
+            //handle remaining events(线程shutdown前的最后数据)
             if (remainingEvents.size() > 0) {
                 logger.debug(format("Dispatching last batch of %d events to the event handler", remainingEvents.size()));
                 tryToHandle(remainingEvents);
@@ -105,7 +105,7 @@ public class ProducerSendThread<T> extends Thread {
 
     public void shutdown() {
         shutdown = true;
-        eventHandler.close();
+        eventHandler.close();//DefaultEeventHandler内close()为空，不用担心最后数据的处理
         logger.info("Shutdown thread complete");
     }
 
@@ -130,6 +130,7 @@ public class ProducerSendThread<T> extends Thread {
                     //
                     full = events.size() >= batchSize;
                 }
+                //Leo: batchSize满 / 定时发往Broker
                 if (full || expired) {
                     if (logger.isDebugEnabled()) {
                         if (expired) {

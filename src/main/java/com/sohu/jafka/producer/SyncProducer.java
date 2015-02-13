@@ -77,7 +77,7 @@ public class SyncProducer implements Closeable {
         send(new ProducerRequest(topic, partition, messages));
     }
 
-    private void send(Request request) {
+    private void send(Request request) {//AsyncProducer调用此处的情况下是MultiProducerRequest
         synchronized (lock) {
             long startTime = System.nanoTime();
             int written = -1;

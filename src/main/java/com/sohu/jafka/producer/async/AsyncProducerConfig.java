@@ -38,6 +38,7 @@ public class AsyncProducerConfig extends SyncProducerConfig implements AsyncProd
     }
 
 
+    // 在该段时间内没有新消息到来的话，发送消息到broker
     public int getQueueTime() {
         return getInt(props, "queue.time", 5000);
     }
@@ -46,10 +47,16 @@ public class AsyncProducerConfig extends SyncProducerConfig implements AsyncProd
         return getInt(props, "queue.size", 10000);
     }
 
+    /**
+     * 1. 0表示队列未满时成功入队，否则丢弃。
+     * 2. 小于0表示当队列满时，阻塞直到成功入队，
+     * 3. 大于0表示等待这些ms都无法成功入队，舍弃
+     * */
     public int getEnqueueTimeoutMs() {
         return getInt(props, "queue.enqueueTimeout.ms", 0);
     }
 
+    // 指定异步发送每次批量发送的消息个数
     public int getBatchSize() {
         return getInt(props, "batch.size", 200);
     }

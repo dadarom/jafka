@@ -41,6 +41,7 @@ public class BoundedByteBufferSend extends AbstractSend {
         this(ByteBuffer.allocate(size));
     }
 
+    //Leo: Sync producer trigger send
     public BoundedByteBufferSend(Request request) {
         this(request.getSizeInBytes() + 2);
         buffer.putShort((short)request.getRequestKey().value);
@@ -52,7 +53,8 @@ public class BoundedByteBufferSend extends AbstractSend {
     public ByteBuffer getBuffer() {
         return buffer;
     }
-
+    
+    //Leo: 将buffer内数据写入Socket's WriteChannel,注意没有用transformTo
     public int writeTo(GatheringByteChannel channel) throws IOException {
         expectIncomplete();
         int written = 0;

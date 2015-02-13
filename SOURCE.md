@@ -62,9 +62,53 @@ Client用： `ProducerData` `ProducerPoolData`
 #### IteratorTemplate
 SyncProducer.send 在check max size of each message时候，结合IteratorTemplate的用法需回顾（怎样形成 MessageAndOffset）
 
+#### Send Receive
+
+##### Producer
+
+Request --> ProducerRequest
+Socket --> (ReadChannel/WriteChannel)BlockingChannel.send(Request) --> BoundedByteBufferSend.writeCompletely(WriteChannel) --> writeTo(WriteChannel)
+
+__ProducerRequest --> BoundedByteBufferSend过程：__
+
+BoundedByteBufferSend: 将Request内数据包装：加入2字节RequestKey.
+按以下格式，将Request内Buffer数据写入BoundedByteBufferSend's Buffer
+
+|字节大小(Byte)|含义|
+|:-------:|:-------:|
+|2|RequestKey, RequestKeys.PRODUCE| 
+|request size|request.bytes| 
+
+`request.bytes`
+|字节大小(Byte)|含义|
+|:-------:|:-------:|
+|2| topic size | 
+|topic | bytes |
+|4| partition | 
+ByteBufferMessageSet --> Bytes
+|4| Bytes size | 
+| | Bytes content|
 
 
+# 总体
+## ConfigSend
+####Producer 
+_对于实时性要求较高的信息，采取同步发送的方法好，而对于像日志这种数据，可以采取异步发送的形式，减小对当前程序的压力。_
 
+1. SyncProducer(借助ByteBuffer)通过BoundedByteBufferSend写入Socket WriteChannel: Broker端应该还有定时flush(where?)
 
+2. AsyncProducer
+将每条数据包装成QueueItem并塞入队列，并启动ProducerSendThread(每个Producer仅一个SendThread)，定时(或者batchSize满时)将pool到的数据发往Broker.
 
+* eventHandler: 处理从队列内取出的数据.__DefaultEventHandler__
+将QueueItem包装成ProducerRequest，利用SyncProducer send MultiProducerRequest.
+* callbackHandler: 处理时的回调
+* syncProducer
 
+由于queue是有大小限制的（防止数据过多，占用大量内存），所以添加的时候有一定的策略，该策略可以通过queue.enqueueTimeout.ms来配置，即enqueueTimeoutMs。策略如下：
+
+1. 等于0---调用offer方法，无论是否成功，直接返回，意味着如果queue满了，消息会被舍弃，并返回false。
+2. 小于0---调用put方法，阻塞直到可以成功加入queue
+3. 大于0---调用offer(e,time,unit)方法，等待一段时间，超时的话返回false
+
+__`写入socket后 怎么处理写入文件的并发写问题呢？？？`__

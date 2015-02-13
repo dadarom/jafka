@@ -339,7 +339,7 @@ public class Utils {
     }
 
     /**
-     * caculate string length with size prefix
+     * caculate string length with size prefix ([short]:2字节的topic length)
      *
      * @param topic the string value (support UTF-8 bytes)
      * @return string size with short prefix (2+topic.length)

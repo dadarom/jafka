@@ -125,7 +125,7 @@ public class ProducerPool<V> implements Closeable {
             syncProducers.put(broker.id, producer);
         } else {
             AsyncProducer<V> producer = new AsyncProducer<V>(new AsyncProducerConfig(props),//
-                    new SyncProducer(new SyncProducerConfig(props)),//
+                    new SyncProducer(new SyncProducerConfig(props)),//注意这里也有同样的SyncProducer
                     serializer,//
                     eventHandler,//
                     config.getEventHandlerProperties(),//

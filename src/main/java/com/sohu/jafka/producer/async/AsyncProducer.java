@@ -156,7 +156,7 @@ public class AsyncProducer<T> implements Closeable {
         }
         closed.set(true);
         sendThread.shutdown();
-        sendThread.awaitShutdown();
+        sendThread.awaitShutdown();//阻塞至最后的数据都处理完(发给Broker)
         producer.close();
         logger.info("Closed AsyncProducer");
     }
