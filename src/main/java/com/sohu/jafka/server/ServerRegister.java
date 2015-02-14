@@ -17,6 +17,17 @@
 
 package com.sohu.jafka.server;
 
+import java.io.Closeable;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
+
+import org.apache.zookeeper.Watcher.Event.KeeperState;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.github.zkclient.IZkStateListener;
 import com.github.zkclient.ZkClient;
 import com.github.zkclient.exception.ZkNodeExistsException;
@@ -24,16 +35,6 @@ import com.sohu.jafka.cluster.Broker;
 import com.sohu.jafka.log.LogManager;
 import com.sohu.jafka.server.TopicTask.TaskType;
 import com.sohu.jafka.utils.zookeeper.ZkUtils;
-import org.apache.zookeeper.Watcher.Event.KeeperState;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.io.Closeable;
-import java.net.InetAddress;
-import java.net.UnknownHostException;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Set;
 
 /**
  * Handles the server's interaction with zookeeper. The server needs to register the following
@@ -77,6 +78,9 @@ public class ServerRegister implements IZkStateListener, Closeable {
         zkClient.subscribeStateChanges(this);
     }
 
+    /***
+     * 	/brokers/topics/{topic}/{brokerID}
+     */
     public void processTask(TopicTask task) {
         final String topicPath = ZkUtils.BrokerTopicsPath + "/" + task.topic;
         final String brokerTopicPath = ZkUtils.BrokerTopicsPath + "/" + task.topic + "/" + config.getBrokerId();
@@ -155,6 +159,7 @@ public class ServerRegister implements IZkStateListener, Closeable {
         }
     }
 
+    @Override
     public void handleNewSession() throws Exception {
         logger.info("re-registering broker info in zookeeper for broker " + config.getBrokerId());
         registerBrokerInZk();
@@ -167,6 +172,7 @@ public class ServerRegister implements IZkStateListener, Closeable {
 
     }
 
+    @Override
     public void handleStateChanged(KeeperState state) throws Exception {
         // do nothing, since zkclient will do reconnect for us.
     }

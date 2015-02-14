@@ -338,10 +338,14 @@ public class LogManager implements PartitionChooser, Closeable {
         if (config.getEnableZookeeper()) {
             serverRegister.registerBrokerInZk();
             for (String topic : getAllTopics()) {
+            	//根据现有的数据文件，写入ZK对应topic相关信息:/topics/[topic]/[node_id-partition_num]
+            	//leo 应该利用TopicTask机制 FIXME: topicRegisterTasks.add(new TopicTask(TaskType.CREATE, topic))
                 serverRegister.processTask(new TopicTask(TaskType.CREATE, topic));
             }
             startupLatch.countDown();
         }
+        
+        // flush数据文件
         logger.debug("Starting log flusher every {} ms with the following overrides {}", config.getFlushSchedulerThreadRate(), logFlushIntervalMap);
         logFlusherScheduler.scheduleWithRate(new Runnable() {
 

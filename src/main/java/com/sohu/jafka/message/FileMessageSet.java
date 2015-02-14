@@ -195,11 +195,16 @@ public class FileMessageSet extends MessageSet {
      * 
      * Append this message to the message set
      * 
+     * @param messages 应该是ByteBufferMessageSet
+     * 
      * @return the written size and first offset
      * @throws IOException
      * 
-     * 将producer传递过来的messages添加到当前messageset对象(channel)中，虽然调用了writeTo方法，但是由于操作系统缓冲的存在，数据可能还没有真正写入磁盘，
+     * 将producer传递过来的messages添加到当前messageset对象(channel)中，
+     * 虽然调用了writeTo方法，但是由于操作系统缓冲的存在，数据可能还没有真正写入磁盘，
      * 而flush方法的作用便是强制写磁盘。这两个方法便完成了消息数据持久化到磁盘的操作。
+     * 
+     * 在多producer写的情况下，大量的并发写数据到channel内，这里可以作MetaQ的内存中排序?!!
      */
     public long[] append(MessageSet messages) throws IOException {
         checkMutable();

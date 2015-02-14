@@ -95,6 +95,54 @@ ByteBufferMessageSet --> Bytes
 * Producer 
 * Consumer
 
+## Server
+
+### server startup
+
+* `logManager.load` `logManager.startup` 
+* `socketServer.startup`
+* `serverInfo.started`
+
+### `ServerRegister`
+处理Broker和ZK之间的交互，主要写入以下信息：
+~~~
+/topics/[topic]/[node_id-partition_num]
+/brokers/[0...N] --> host:port
+~~~
+
+### LogManager主要方法过程
+_初始化消息数据管理类LogManager，并将所有的消息数据按照一定格式读入内存（非数据内容本身）_
+
+* __构造函数:__ 
+
+* __load:__ 	
+1. 加载Data相关信息
+
+2. 启动delete task of old logs
+
+3. ServerRegister.startup: 
+
+1) zkClient->subscribeStateChanges-->KeeperState change;new session
+2) TopicRegisterTask.start(守护线程): 阻塞式监听topic task（_CREATE/DELETE/ENLARGE/SHUTDOWN_），并处理每个Task
+
+* __startup__
+1. Register this broker in ZK
+2. flushAllLogs 
+定时(强制/按一定interval)flush all messages to disk： broker内的各topic数据文件 --> log.flush --> segments.getLastView().getMessageSet().flush();
+--> FileMessageSet.flush(): 将此segment.fileChannel内的数据force to disk --> channel.force(true); __ Forces any updates to this channel's file to be written to the storage device that contains it.__
+
+__segment.fileChannel内的数据写入方__
+
+`FileMessageSet.append + FileMessageSet.flush`
+_将producer传递过来的messages添加到当前messageset对象(channel)中，虽然调用了writeTo方法，但是由于操作系统缓冲的存在，数据可能还没有真正写入磁盘，而flush方法的作用便是强制写磁盘。这两个方法便完成了消息数据持久化到磁盘的操作。_
+
+~~~
+FileMessageSet.append(MessageSet)
+>>Log.append(ByteBufferMessageSet)
+>>>>HttpRequestHandler.handleProducerRequest(ProducerRequest)
+>>>>ProducerHandler.handleProducerRequest(ProducerRequest)
+~~~
+
 
 ## ConfigSend
 ####Producer 
@@ -122,4 +170,8 @@ __`写入socket后 怎么处理写入文件的并发写问题呢？？？`__
 __多consumer读不同数据时的性能问题 利用linux的预读算法 / RandomAccess ？__
 
 
+
+## 关于MetaQ:
+* 优先级： MetaQ支持在内存中排序，但是放弃了磁盘系统的排序。
+* 重复消费(Exactly And Only Once)： 保证送达，不保证不重复，而在业务中判断重复，消息消费具有幂等性。
 

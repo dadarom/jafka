@@ -33,6 +33,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.sohu.jafka.api.OffsetRequest;
 import com.sohu.jafka.common.InvalidMessageSizeException;
@@ -47,8 +49,6 @@ import com.sohu.jafka.mx.LogStats;
 import com.sohu.jafka.utils.KV;
 import com.sohu.jafka.utils.Range;
 import com.sohu.jafka.utils.Utils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * a log is message sets with more than one files.
