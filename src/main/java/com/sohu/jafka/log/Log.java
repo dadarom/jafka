@@ -201,6 +201,7 @@ public class Log implements ILog {
      */
     public MessageSet read(long offset, int length) throws IOException {
         List<LogSegment> views = segments.getView();
+        //leo 跨两个文件怎么办？ FIXME
         LogSegment found = findRange(views, offset, views.size());
         if (found == null) {
             if (logger.isTraceEnabled()) {
@@ -221,7 +222,7 @@ public class Log implements ILog {
             }
             numberOfMessages += 1;
         }
-        //
+        // metric
         BrokerTopicStat.getBrokerTopicStat(getTopicName()).recordMessagesIn(numberOfMessages);
         BrokerTopicStat.getBrokerAllTopicStat().recordMessagesIn(numberOfMessages);
         logStats.recordAppendedMessages(numberOfMessages);
@@ -239,7 +240,11 @@ public class Log implements ILog {
         synchronized (lock) {
             try {
                 LogSegment lastSegment = segments.getLastView();
+                
+                //注意这里的 fileMessageSet.append(byteBufferMessageSet)
                 long[] writtenAndOffset = lastSegment.getMessageSet().append(validMessages);
+                
+                
                 if (logger.isTraceEnabled()) {
                     logger.trace(String.format("[%s,%s] save %d messages, bytes %d", name, lastSegment.getName(),
                             numberOfMessages, writtenAndOffset[0]));

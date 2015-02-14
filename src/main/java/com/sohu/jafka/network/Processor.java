@@ -87,7 +87,8 @@ public class Processor extends AbstractServerThread {
                     SelectionKey key = null;
                     try {
                         key = iter.next();
-                        iter.remove();
+                        iter.remove();//注意这里有remove,为什么需要不断的remove? FIXME
+                        
                         if (key.isReadable()) {
                             read(key);
                         } else if (key.isWritable()) {
@@ -144,14 +145,20 @@ public class Processor extends AbstractServerThread {
     }
 
     private void write(SelectionKey key) throws IOException {
+    	// MessageSetSend
         Send response = (Send) key.attachment();
+        
         SocketChannel socketChannel = channelFor(key);
+        
+        // MessageSetSend.writeTo
         int written = response.writeTo(socketChannel);
+        
         stats.recordBytesWritten(written);
         if (response.complete()) {
             key.attach(null);
             key.interestOps(SelectionKey.OP_READ);
         } else {
+        	//继续写
             key.interestOps(SelectionKey.OP_WRITE);
             getSelector().wakeup();
         }
@@ -161,24 +168,36 @@ public class Processor extends AbstractServerThread {
         SocketChannel socketChannel = channelFor(key);
         Receive request = null;
         if (key.attachment() == null) {
+        	//第一次读取数据
             request = new BoundedByteBufferReceive(maxRequestSize);
             key.attach(request);
         } else {
+        	//多次数据时，直接由key的attachment中获取
             request = (Receive) key.attachment();
         }
         int read = request.readFrom(socketChannel);
         stats.recordBytesRead(read);
         if (read < 0) {
+        	//没有消息数据
+        	/***
+        	 * leo TODO  为什么要不断的close();长连接岂不是更好？！
+        	 * 1. 有read ready,却读不到数据，应该是异常情况，所以close?!
+        	 * 2. 传递数据多情况下，最后一次读完后的状体。也要close?!
+        	 * 
+        	 */
             close(key);
         } else if (request.complete()) {
+        	 //成功读取消息数据，传入handle处理
             Send maybeResponse = handle(key, request);
             key.attach(null);
+            // 如果有返回数据，则注册write事件
             // if there is a response, send it, otherwise do nothing
             if (maybeResponse != null) {
                 key.attach(maybeResponse);
                 key.interestOps(SelectionKey.OP_WRITE);
             }
         } else {
+        	// 传递数据多，要分多次读取，所以要再次注册read事件
             // more reading to be done
             key.interestOps(SelectionKey.OP_READ);
             getSelector().wakeup();
@@ -206,7 +225,10 @@ public class Processor extends AbstractServerThread {
             throw new InvalidRequestException("No handler found for request");
         }
         long start = System.nanoTime();
+        
+        // handler request
         Send maybeSend = handlerMapping.handler(requestType, request);
+        
         stats.recordRequest(requestType, System.nanoTime() - start);
         return maybeSend;
     }
@@ -223,6 +245,7 @@ public class Processor extends AbstractServerThread {
 
     public void accept(SocketChannel socketChannel) {
         newConnections.add(socketChannel);
+        //唤醒selector.select(500)，使该线程立即执行，尽快处理新连入的channel
         getSelector().wakeup();
     }
 

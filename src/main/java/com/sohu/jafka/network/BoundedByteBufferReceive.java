@@ -37,6 +37,10 @@ public class BoundedByteBufferReceive extends AbstractTransmission implements Re
 
     final ByteBuffer sizeBuffer = ByteBuffer.allocate(4);
 
+    /**
+     * 将client socket内read channel的数据读如bytebuffer.
+     * 但ProducerRequest时数据量较大，借助了buffer，貌似没有像FetchHandler那样在channel间transfer数据（zero copy）
+     */
     private ByteBuffer contentBuffer = null;
 
     private int maxRequestSize;

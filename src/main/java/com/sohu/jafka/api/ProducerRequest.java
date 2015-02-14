@@ -60,8 +60,11 @@ public class ProducerRequest implements Request {
         String topic = Utils.readShortString(buffer);
         int partition = buffer.getInt();
         int messageSetSize = buffer.getInt();
+        
+        //注意这里新的ByteBuffer是共享原buffer的内存的
         ByteBuffer messageSetBuffer = buffer.slice();
         messageSetBuffer.limit(messageSetSize);
+        
         buffer.position(buffer.position() + messageSetSize);
         return new ProducerRequest(topic, partition, new ByteBufferMessageSet(messageSetBuffer));
     }

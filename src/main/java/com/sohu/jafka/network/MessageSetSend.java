@@ -45,6 +45,9 @@ public class MessageSetSend extends AbstractSend {
 
     public final ErrorMapping errorCode;
 
+    /***
+     * @param messages FileMessageSet
+     */
     public MessageSetSend(MessageSet messages, ErrorMapping errorCode) {
         super();
         this.messages = messages;
@@ -63,6 +66,12 @@ public class MessageSetSend extends AbstractSend {
         this(MessageSet.Empty);
     }
 
+    /**
+     * FetchHandler的response write
+     * 
+     * 主要是这里的channel对上了，从而实现zero copy
+     * 直接FileMessageSet --> clientSocket channel
+     */
     public int writeTo(GatheringByteChannel channel) throws IOException {
         expectIncomplete();
         int written = 0;
@@ -70,7 +79,11 @@ public class MessageSetSend extends AbstractSend {
             written += channel.write(header);
         }
         if (!header.hasRemaining()) {
+        	/**
+        	 * FileMessageSet内的 fileChannel.transferTo(socketChannel)
+        	 */
             int fileBytesSent = (int) messages.writeTo(channel, sent, size - sent);
+            
             written += fileBytesSent;
             sent += fileBytesSent;
         }

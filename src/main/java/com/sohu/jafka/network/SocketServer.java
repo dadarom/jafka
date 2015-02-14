@@ -86,6 +86,8 @@ public class SocketServer implements Closeable {
             Utils.newThread("jafka-processor-" + i, processors[i], false).start();
         }
         Utils.newThread("jafka-acceptor", acceptor, false).start();
+        
+        //等待acceptor线程启动OK 
         acceptor.awaitStartup();
     }
 

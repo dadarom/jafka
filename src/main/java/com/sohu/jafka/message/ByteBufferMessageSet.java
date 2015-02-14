@@ -195,7 +195,11 @@ public class ByteBufferMessageSet extends MessageSet{
     }
     
     /***
-     * 将数据写入指定的channel。这里的channel是FileChannel，即该方法的调用时机是broker写数据文件
+     * ProducerHandler将client socket内数据形成ByteBufferMessageSet，最终写入fileChannel
+     * 
+     * 将数据写入指定的channel。
+     * 
+     * 这里的channel是FileChannel，即该方法的调用时机是broker写数据文件
      */
     @Override
     public long writeTo(GatheringByteChannel channel, long offset, long maxSize) throws IOException {

@@ -83,7 +83,7 @@ public class Server implements Closeable {
                 needRecovery = false;
                 cleanShutDownFile.delete();
             }
-            //初始化消息数据管理类LogManager，并将所有的消息数据按照一定格式读入内存（非数据内容本身）
+            //1. 初始化消息数据管理类LogManager，并将所有的消息数据按照一定格式读入内存（非数据内容本身）
             this.logManager = new LogManager(config,//
                     scheduler,//
                     1000L * 60 * config.getLogCleanupIntervalMinutes(),//
@@ -92,11 +92,13 @@ public class Server implements Closeable {
             this.logManager.setRollingStategy(config.getRollingStrategy());
             logManager.load();
 
+            //2. 
             RequestHandlers handlers = new RequestHandlers(logManager);
             socketServer = new SocketServer(handlers, config);
             Utils.registerMBean(socketServer.getStats());
             socketServer.startup();
-            //
+            
+            //3. 
             final int httpPort = config.getHttpPort();
             if(httpPort>0){
                 HttpRequestHandler httpRequestHandler = new HttpRequestHandler(logManager);
@@ -105,15 +107,19 @@ public class Server implements Closeable {
             }
 
             Mx4jLoader.maybeLoad();
+            
+           //4. 如果开启了zookeeper连接，则将该broker信息注册到zookeeper中，并开启定时flush消息数据的线程
             /**
              * Registers this broker in ZK. After this, consumers can connect to broker. So
              * this should happen after socket server start.
              */
-            //如果开启了zookeeper连接，则将该broker信息注册到zookeeper中，并开启定时flush消息数据的线程
             logManager.startup();
             final long cost = (System.currentTimeMillis() - start) / 1000;
             logger.info("Jafka(brokerid={}) started at *:{}, cost {} seconds",config.getBrokerId(), config.getPort(), cost);
+           
+            //5. 
             serverInfo.started();
+            
         } catch (Exception ex) {
             logger.error("========================================");
             logger.error("Fatal error during startup.", ex);

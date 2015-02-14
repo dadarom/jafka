@@ -44,6 +44,8 @@ public class ProducerHandler extends AbstractHandler {
 
     public Send handler(RequestKeys requestType, Receive receive) {
         final long st = System.currentTimeMillis();
+        
+        
         ProducerRequest request = ProducerRequest.readFrom(receive.buffer());
         if (logger.isDebugEnabled()) {
             logger.debug("Producer request " + request.toString());
@@ -60,7 +62,23 @@ public class ProducerHandler extends AbstractHandler {
         int partition = request.getTranslatedPartition(logManager);
         try {
             final ILog log = logManager.getOrCreateLog(request.topic, partition);
+          
+            
+          //=================================================
+            /**
+             * 将client socket流内producer request的数据写入LogSegment的file channel.
+             * 注意这里的messages是ByteBufferMessageSet
+             */
+            
+            /***
+             * 技巧点： 注意这里 ProducerRequest的 ByteBufferMessageSet内的 byte buffer
+             * 		   是和 从client socket读入后形成的byte buffer是同一内存buffer
+             * 
+             * 即： 从socket channel 最终到 file channel时，只有一次byte buffer的复制！！！
+             */
             log.append(request.messages);
+          //=================================================
+            
             long messageSize = request.messages.getSizeInBytes();
             if (logger.isDebugEnabled()) {
                 logger.debug(messageSize + " bytes written to logs " + log);

@@ -72,7 +72,10 @@ public class FileMessageSet extends MessageSet {
         this.mutable = mutable;
         this.needRecover = needRecover;
         if (mutable) {
-            if (limit < Long.MAX_VALUE || offset > 0) throw new IllegalArgumentException(
+        	/***
+        	 * 写的情况(ProducerHannler)
+        	 */
+        	if (limit < Long.MAX_VALUE || offset > 0) throw new IllegalArgumentException(
                     "Attempt to open a mutable message set with a view or offset, which is not allowed.");
 
             if (needRecover.get()) {
@@ -86,6 +89,11 @@ public class FileMessageSet extends MessageSet {
                 channel.position(channel.size());
             }
         } else {
+        	/***
+        	 * 读的情况下(FetchHandler),
+        	 * 注意这里没有实际的形成字符串之类的,
+        	 * 而是包装成MessageSetSend作为FetchHandler的返回
+        	 */
             setSize.set(Math.min(channel.size(), limit) - offset);
             setHighWaterMark.set(getSizeInBytes());
         }
@@ -169,6 +177,7 @@ public class FileMessageSet extends MessageSet {
 
     /***
      * sendfile: zero copy
+     * FetchHandler的Response的writeTo(socketChannel)用到
      */
     @Override
     public long writeTo(GatheringByteChannel destChannel, long writeOffset, long maxSize) throws IOException {
@@ -195,7 +204,7 @@ public class FileMessageSet extends MessageSet {
      * 
      * Append this message to the message set
      * 
-     * @param messages 应该是ByteBufferMessageSet
+     * @param messages ByteBufferMessageSet
      * 
      * @return the written size and first offset
      * @throws IOException
@@ -206,6 +215,8 @@ public class FileMessageSet extends MessageSet {
      * 
      * 在多producer写的情况下，大量的并发写数据到channel内，这里可以作MetaQ的内存中排序?!!
      */
+    // messages --> ByteBufferMessageSet | channel --> fileChannel
+    // 
     public long[] append(MessageSet messages) throws IOException {
         checkMutable();
         long written = 0L;

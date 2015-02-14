@@ -82,7 +82,7 @@ public class LogManager implements PartitionChooser, Closeable {
 
     final CountDownLatch startupLatch;
 
-    //
+    // <topic,{partition, log}> 
     private final Pool<String, Pool<Integer, Log>> logs = new Pool<String, Pool<Integer, Log>>();
 
     private final Scheduler logFlusherScheduler = new Scheduler(1, "jafka-logflusher-", false);
@@ -271,6 +271,9 @@ public class LogManager implements PartitionChooser, Closeable {
      * logRetentionSize bytes in size
      *
      * @throws IOException
+     * 
+     * 因为segments已经按offset排序，也就是从offset最小处开始(保留最近数据)，
+     * 将总大小超出logRetentionSize部分的数据全部删除
      */
     private int cleanupSegmentsToMaintainSize(final Log log) throws IOException {
         if (logRetentionSize < 0 || log.size() < logRetentionSize) return 0;
@@ -496,6 +499,7 @@ public class LogManager implements PartitionChooser, Closeable {
                 }
             }
         }
+        //将新topic同步到zk
         if (hasNewTopic && config.getEnableZookeeper()) {
             topicRegisterTasks.add(new TopicTask(TaskType.CREATE, topic));
         }

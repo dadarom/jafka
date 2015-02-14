@@ -99,8 +99,35 @@ ByteBufferMessageSet --> Bytes
 
 ### server startup
 
-* `logManager.load` `logManager.startup` 
+* `logManager.load`
+
 * `socketServer.startup`
+1. __RequestHandlers:__ handle request from client
+2. __SocketServer:__ 
+
+   `Processor`: Thread that processes all requests from a single connection.There are N of these running in parallel each of which has its own selectors.它先于Accptor线程启动，一直等待至`Acceptor`放入client socketChannel（有client socket接入）,
+      
+   `Acceptor`: Thread that accepts and configures new connections. There is only need for one of these.即ServerSocket，等待Socket的连接。分配ClientSocketChannel和对应的Processor,这样可以在processors内均匀分配待处理的clientSocket.
+   
+   __processor处理client socket过程：__
+   >1. 在该processor的selector上注册该channel的read事件，之后processor等待读写请求并做出响应的操作。
+   >2. 按读出的RequestType找RequestHandler处理，有response再注册Write Event
+.__(但为什么频繁的close socket & remove selector key???)__
+
+   >>A: __ProducerHandler__ --> ByteBufferMessageSet
+   
+   每个broker内startup时的单实例requestHandlerFactory有多个processors共享，应此多producer同时写同topic的数据时，_(即使有brokers间的分摊写入的patitions,但同一BrokerPartion仍有并发写的可能)_虽然不同的process处理client socket，但各自processor会用同一个requestHandler取处理log.append.__所以完全依赖log.append内部的锁来控制并发写问题，这个应该比较影响性能吧!!!__
+   
+   >>B: __FetchHandler__ --> FileMessageSet
+   
+   根据offset找到对应的LogSegment -> fileMessageSet.read(offset,size);`log.read`反馈的是FileMessageSet,在包装成`MessageSetSend`__(A zero-copy message response that writes the bytes needed directly from the file wholly in kernel space)__,其在response consumer时的writeTo(socketChannel)就是用的`FileMessageSet内的 fileChannel.transferTo(socketChannel)`
+   
+   _command window模式下的consume topic的刷数据是怎样实现的？？ MultiFetchRequest ？_
+   
+* `httpServer.start`
+
+* `logManager.startup` 
+
 * `serverInfo.started`
 
 ### `ServerRegister`
@@ -118,7 +145,7 @@ _初始化消息数据管理类LogManager，并将所有的消息数据按照一
 * __load:__ 	
 1. 加载Data相关信息
 
-2. 启动delete task of old logs
+2. 启动delete task of old logs： LogSegmentFilter --> 按时间 / 按总大小
 
 3. ServerRegister.startup: 
 
@@ -129,7 +156,7 @@ _初始化消息数据管理类LogManager，并将所有的消息数据按照一
 1. Register this broker in ZK
 2. flushAllLogs 
 定时(强制/按一定interval)flush all messages to disk： broker内的各topic数据文件 --> log.flush --> segments.getLastView().getMessageSet().flush();
---> FileMessageSet.flush(): 将此segment.fileChannel内的数据force to disk --> channel.force(true); __ Forces any updates to this channel's file to be written to the storage device that contains it.__
+--> FileMessageSet.flush(): 将此segment.fileChannel内的数据force to disk --> channel.force(true); __Forces any updates to this channel's file to be written to the storage device that contains it.__
 
 __segment.fileChannel内的数据写入方__
 
@@ -142,6 +169,24 @@ FileMessageSet.append(MessageSet)
 >>>>HttpRequestHandler.handleProducerRequest(ProducerRequest)
 >>>>ProducerHandler.handleProducerRequest(ProducerRequest)
 ~~~
+
+#### Log.append
+* 将messages写入LogSegment的file channel
+
+* 每隔flushInterval条数据，触发`segments.getLastView().getMessageSet().flush();`
+
+* 每批次的messages写入都会rollingStategy.check(lastSegment)来判断是否需轮转文件(可以根据文件大小highWaterMark/时间)
+
+__Log内lock对象的使用__
+
+* Log.append会竞争lock:`写入file channel->maybeFlush->maybeRoll`用到了锁的继承._lock的存在，保证了其内部对文件操作的有序性;同时在多Producer写同一topic_partition时不会有并发写问题_
+
+* log.validateSegments： 实例化Log加载data文件时的验证Segments,不会有(也不允许)data文件有变化
+
+* log.close:  segments.close --> fileChannels.close
+
+* log.markDeletedWhile: 定时delete log task会调用，此时不允许data文件(segments)有变化
+
 
 
 ## ConfigSend
@@ -175,3 +220,21 @@ __多consumer读不同数据时的性能问题 利用linux的预读算法 / Rand
 * 优先级： MetaQ支持在内存中排序，但是放弃了磁盘系统的排序。
 * 重复消费(Exactly And Only Once)： 保证送达，不保证不重复，而在业务中判断重复，消息消费具有幂等性。
 
+## NIO
+
+1. [Java NIO与IO](http://ifeve.com/java-nio-vs-io/)
+
+* Java NIO和IO之间第一个最大的区别是，IO是面向流的，NIO是面向缓冲区的。 Java IO面向流意味着每次从流中读一个或多个字节，直至读取所有字节，它们没有被缓存在任何地方。此外，它不能前后移动流中的数据。如果需要前后移动从流中读取的数据，需要先将它缓存到一个缓冲区。 Java NIO的缓冲导向方法略有不同。数据读取到一个它稍后处理的缓冲区，需要时可在缓冲区中前后移动。这就增加了处理过程中的灵活性。
+
+* Java IO的各种流是阻塞的。这意味着，当一个线程调用read() 或 write()时，该线程被阻塞，直到有一些数据被读取，或数据完全写入。该线程在此期间不能再干任何事情了。 Java NIO的非阻塞模式，使一个线程从某通道发送请求读取数据，但是它仅能得到目前可用的数据，如果目前没有数据可用时，就什么都不会获取。而不是保持线程阻塞，所以直至数据变的可以读取之前，该线程可以继续做其他的事情。 非阻塞写也是如此。一个线程请求写入一些数据到某通道，但不需要等待它完全写入，这个线程同时可以去做别的事情。 线程通常将非阻塞IO的空闲时间用于在其它通道上执行IO操作，所以一个单独的线程现在可以管理多个输入和输出通道（channel）。
+
+* Java NIO的选择器允许一个单独的线程来监视多个输入通道，你可以注册多个通道使用一个选择器，然后使用一个单独的线程来“选择”通道：这些通道里已经有可以处理的输入，或者选择已准备写入的通道。这种选择机制，使得一个单独的线程很容易来管理多个通道。
+
+2. [Selector](http://ifeve.com/selectors/)
+
+* 与Selector一起使用时，Channel必须处于非阻塞模式下。 这意味着不能将FileChannel与Selector一起使用，因为FileChannel不能切换到非阻塞模式。而套接字通道都可以.
+
+* 通道触发了一个事件意思是该事件已经就绪。所以，某个channel成功连接到另一个服务器称为“连接就绪”。一个server socket channel准备好接收新进入的连接称为“接收就绪”。一个有数据可读的通道可以说是“读就绪”。等待写数据的通道可以说是“写就绪”。
+
+* __wakeUp()__
+某个线程调用select()方法后阻塞了，即使没有通道已经就绪，也有办法让其从select()方法返回。只要让其它线程在第一个线程调用select()方法的那个对象上调用Selector.wakeup()方法即可。阻塞在select()方法上的线程会立马返回。* 
