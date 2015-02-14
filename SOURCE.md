@@ -81,7 +81,6 @@ BoundedByteBufferSend: 将Request内数据包装：加入2字节RequestKey.
 
 `request.bytes`
 |字节大小(Byte)|含义|
-|:-------:|:-------:|
 |2| topic size | 
 |topic | bytes |
 |4| partition | 
@@ -91,6 +90,12 @@ ByteBufferMessageSet --> Bytes
 
 
 # 总体
+三条主线：
+* Server
+* Producer 
+* Consumer
+
+
 ## ConfigSend
 ####Producer 
 _对于实时性要求较高的信息，采取同步发送的方法好，而对于像日志这种数据，可以采取异步发送的形式，减小对当前程序的压力。_
@@ -112,3 +117,9 @@ _对于实时性要求较高的信息，采取同步发送的方法好，而对�
 3. 大于0---调用offer(e,time,unit)方法，等待一段时间，超时的话返回false
 
 __`写入socket后 怎么处理写入文件的并发写问题呢？？？`__
+* socket readstream listener --> zero copy到文件内： 进程内数据PageCache直接到Disk？
+
+__多consumer读不同数据时的性能问题 利用linux的预读算法 / RandomAccess ？__
+
+
+
