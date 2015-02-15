@@ -54,7 +54,15 @@ class Acceptor extends AbstractServerThread {
             serverChannel = ServerSocketChannel.open();
             serverChannel.configureBlocking(false);
             serverChannel.socket().bind(new InetSocketAddress(port));
+            
+            // 注意这里是 serverChannel 注册到当前线程的selector对象，所以key.channel()取出的是serverChannel
+            /** If the selector
+            * detects that the corresponding server-socket channel is ready to accept
+            * another connection, or has an error pending, then it will add
+            * <tt>OP_ACCEPT</tt> to the key's ready set and add the key to its
+            * selected-key */
             serverChannel.register(getSelector(), SelectionKey.OP_ACCEPT);
+            
         } catch (IOException e) {
             logger.error("listener on port " + port + " failed.");
             throw new RuntimeException(e);
@@ -67,11 +75,14 @@ class Acceptor extends AbstractServerThread {
         while(isRunning()) {
             int ready = -1;
             try {
+            	// Wait for an event one of the registered ServerChannel
                 ready = getSelector().select(500L);
             } catch (IOException e) {
                 throw new IllegalStateException(e);
             }
-            if(ready<=0)continue;
+            if(ready<=0) continue;
+            
+            // the event is ready
             Iterator<SelectionKey> iter = getSelector().selectedKeys().iterator();
             while(iter.hasNext() && isRunning())
                 try {

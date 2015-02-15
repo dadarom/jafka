@@ -72,7 +72,7 @@ public class Processor extends AbstractServerThread {
         this.newConnections = new ArrayBlockingQueue<SocketChannel>(maxCacheConnections);
     }
 
-    public void run() {
+    public void run() {//注意这里是长连接，只有在异常情况下才close
         startupComplete();
         while (isRunning()) {
             try {
@@ -80,14 +80,17 @@ public class Processor extends AbstractServerThread {
                 configureNewConnections();
 
                 final Selector selector = getSelector();
+            
+                // Wait for an event one of the registered channels
                 int ready = selector.select(500);
                 if (ready <= 0) continue;
+                
                 Iterator<SelectionKey> iter = selector.selectedKeys().iterator();
                 while (iter.hasNext() && isRunning()) {
                     SelectionKey key = null;
                     try {
                         key = iter.next();
-                        iter.remove();//注意这里有remove,为什么需要不断的remove? FIXME
+                        iter.remove();//注意这里有remove,为什么需要不断的remove: 通过listen的event type顺序，控制读写顺序
                         
                         if (key.isReadable()) {
                             read(key);
@@ -156,6 +159,10 @@ public class Processor extends AbstractServerThread {
         stats.recordBytesWritten(written);
         if (response.complete()) {
             key.attach(null);
+            /***
+             *  Register the new SocketChannel with our Selector, indicating
+             *  we'd like to be notified when there's data waiting to be read
+             */
             key.interestOps(SelectionKey.OP_READ);
         } else {
         	//继续写
@@ -175,32 +182,62 @@ public class Processor extends AbstractServerThread {
         	//多次数据时，直接由key的attachment中获取
             request = (Receive) key.attachment();
         }
+        
+        /***
+         *  BoundedByteBufferReceive.readFrom
+         *  
+         *  if end of the socketChannel,and readCount == -1.Socket has likely been closed.
+         */
         int read = request.readFrom(socketChannel);
+        //=====================================================
+        
         stats.recordBytesRead(read);
         if (read < 0) {
         	//没有消息数据
         	/***
-        	 * leo TODO  为什么要不断的close();长连接岂不是更好？！
+        	 * leo TODO  为什么要不断的close();长连接岂不是更好？！ --> 正常情况下read socket channel是有数据的，若read == -1，即Socket has likely been closed，所以这里也主动关闭下
+        	 * 
         	 * 1. 有read ready,却读不到数据，应该是异常情况，所以close?!
         	 * 2. 传递数据多情况下，最后一次读完后的状体。也要close?!
         	 * 
         	 */
             close(key);
+            
         } else if (request.complete()) {
-        	 //成功读取消息数据，传入handle处理
+        	/** 
+        	 * socket流内的第一个int即content size,就决定了是否要分包读。
+        	 * 
+        	 * 正常情况下会走setCompleted,除非socket closed异常,才会出现read == -1情况
+        	 * 
+        	 */
+        	//成功读取消息数据，传入handle处理
             Send maybeResponse = handle(key, request);
             key.attach(null);
+            
             // 如果有返回数据，则注册write事件
             // if there is a response, send it, otherwise do nothing
             if (maybeResponse != null) {
                 key.attach(maybeResponse);
                 key.interestOps(SelectionKey.OP_WRITE);
+                
+                /*** 
+                 * 
+                 * 对应channel没有个更多的数据在写；或者error阻塞，即认为该channel可写（write ready）
+				 *
+                 * If the selector
+			     * detects that the corresponding channel is ready for writing, has been
+			     * remotely shut down for further writing, or has an error pending, then it
+			     * will add <tt>OP_WRITE</tt> to the key's ready set and add the key to its
+			     * selected-key set.
+                 */
             }
         } else {
-        	// 传递数据多，要分多次读取，所以要再次注册read事件
+        	
+        	// 传递数据多，要分多次读取，所以要再次注册read事件：分包读入数据
             // more reading to be done
             key.interestOps(SelectionKey.OP_READ);
             getSelector().wakeup();
+            
             if (logger.isTraceEnabled()) {
                 logger.trace("reading request not been done. " + request);
             }
@@ -239,6 +276,11 @@ public class Processor extends AbstractServerThread {
             if (logger.isDebugEnabled()) {
                 logger.debug("Listening to new connection from " + channel.socket().getRemoteSocketAddress());
             }
+            /*** 注意这里是client socket channel： ready for reading
+             * If the selector detects that the corresponding channel is ready for reading ....
+             * it will add <tt>OP_READ</tt> to the key's
+             * ready-operation set and add the key to its selected-key
+             */
             channel.register(getSelector(), SelectionKey.OP_READ);
         }
     }
