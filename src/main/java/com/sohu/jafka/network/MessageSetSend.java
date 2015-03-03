@@ -68,9 +68,10 @@ public class MessageSetSend extends AbstractSend {
 
     /**
      * FetchHandler的response write
+     * FileMessageSet标记好读起始未知+水位
      * 
-     * 主要是这里的channel对上了，从而实现zero copy
-     * 直接FileMessageSet --> clientSocket channel
+     * 主要是这里的channel直接对上了，从而实现zero copy: 
+     * 直接FileMessageSet.fileChannel --> clientSocket channel
      */
     public int writeTo(GatheringByteChannel channel) throws IOException {
         expectIncomplete();

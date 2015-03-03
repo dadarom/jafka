@@ -238,3 +238,29 @@ __多consumer读不同数据时的性能问题 利用linux的预读算法 / Rand
 
 * __wakeUp()__
 某个线程调用select()方法后阻塞了，即使没有通道已经就绪，也有办法让其从select()方法返回。只要让其它线程在第一个线程调用select()方法的那个对象上调用Selector.wakeup()方法即可。阻塞在select()方法上的线程会立马返回。* 
+
+## 参考
+
+[kafka design](http://tech.meituan.com/kafka-fs-design-theory.html)
+
+### 写message
+消息从java堆转入page cache(即物理内存)。由异步线程刷盘,消息从page cache刷入磁盘。
+
+### 读message
+消息直接从page cache转入socket发送出去。
+当从page cache没有找到相应数据时，此时会产生磁盘IO,从磁盘Load消息到page cache,然后直接从socket发出去
+
+### Kafka高效文件存储设计特点
+Kafka把topic中一个parition大文件分成多个小文件段，通过多个小文件段，就容易定期清除或删除已经消费完文件，减少磁盘占用。
+通过索引信息可以快速定位message和确定response的最大大小。
+通过index元数据全部映射到memory，可以避免segment file的IO磁盘操作。
+通过索引文件稀疏存储，可以大幅降低index文件元数据占用空间大小。
+
+## 注意
+### 消费实现了channel TO channel,但生产还是用ByteBuffer缓存了socket写数据(虽然之后ByteBuffer都是共享内存)。Producer的数据应该也可以用channe2channel：利用fileChannel.tranferFrom
+
+### 实现点
+1. 备份的实现
+2. 读数据时的均匀分配的实现： 写入的数据还是ByteBuffer内的数据，而非解压缩后的数据。存入磁盘后的压缩(多条)数据在消费时是怎么一条条消费呢?    
+3. Command模式下读写的实现
+

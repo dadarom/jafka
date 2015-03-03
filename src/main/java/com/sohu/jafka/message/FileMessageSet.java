@@ -93,6 +93,8 @@ public class FileMessageSet extends MessageSet {
         	 * 读的情况下(FetchHandler),
         	 * 注意这里没有实际的形成字符串之类的,
         	 * 而是包装成MessageSetSend作为FetchHandler的返回
+        	 * 
+        	 * 即只标记好读的水位，在真正写socket时，通过PageCache直接写入socket
         	 */
             setSize.set(Math.min(channel.size(), limit) - offset);
             setHighWaterMark.set(getSizeInBytes());

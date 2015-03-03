@@ -127,6 +127,12 @@ public class ByteBufferMessageSet extends MessageSet{
         return new Iter(isShallow);
     }
     
+    /***
+     * 一个Message(ByteBuffer)可能是多条消息数据缩后构成的，所以在遍历的时候便存在一个是否要遍历压缩的Message中每条消息数据的问题，
+     * 其由isShallow参数决定：true不遍历，false遍历。
+     * 
+     * 实现方式是通过topIter遍历一级Message，当遇到压缩的Message时，将其解压缩并且用innerIter记录其遍历情况，当遍历结束后，回到topIter继续遍历。
+     */
     class Iter extends IteratorTemplate<MessageAndOffset> {
 
         boolean isShallow;
@@ -154,8 +160,8 @@ public class ByteBufferMessageSet extends MessageSet{
                 }
                 return allDone();
             }
-            //LEO: 取每条message（4字节Size + playload）
-            ByteBuffer message = topIter.slice();
+            //LEO: 每条message（4字节Size + playload）,正常情况（非压缩）下是一条数据
+            ByteBuffer message = topIter.slice();//这里每个ByteBuffer对象都像一个框（针对同一个内存），标记好水位
             message.limit(size);
             topIter.position(topIter.position() + size);
             Message newMessage = new Message(message);
@@ -169,10 +175,11 @@ public class ByteBufferMessageSet extends MessageSet{
                 currValidBytes += 4 +size;
                 return new MessageAndOffset(newMessage, currValidBytes);
             }
-            //compress message
+            // compress message
             if(!newMessage.isValid()) {
                 throw new InvalidMessageException("Compressed message is invalid");
             }
+            // 解压后的多条数据 再次遍历
             innerIter = CompressionUtils.decompress(newMessage).internalIterator(false);
             if(!innerIter.hasNext()) {
                 currValidBytes += 4 + lastMessageSize;
@@ -184,7 +191,11 @@ public class ByteBufferMessageSet extends MessageSet{
         @Override
         protected MessageAndOffset makeNext() {
             if (isShallow) return makeNextOuter();
+            
+            // 继续外部iterator: topIter
             if (innerDone()) return makeNextOuter();
+            
+            // innerIter还没迭代完
             MessageAndOffset messageAndOffset = innerIter.next();
             if (!innerIter.hasNext()) {
                 currValidBytes += 4 + lastMessageSize;

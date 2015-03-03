@@ -209,6 +209,7 @@ public class Log implements ILog {
             }
             return MessageSet.Empty;
         }
+        //FileMessageSet: 只标记好读的水位
         return found.getMessageSet().read(offset - found.start(), length);
     }
 
@@ -216,7 +217,14 @@ public class Log implements ILog {
         //validate the messages
         messages.verifyMessageSize(maxMessageSize);
         int numberOfMessages = 0;
-        for (MessageAndOffset messageAndOffset : messages) {
+        for (MessageAndOffset messageAndOffset : messages) {//这里消耗CPU后，近近是统计消息个数？？
+        	/****
+        	 * 等价于：
+        	 * iter = messages.iterator();
+        	 * while(iter.hasNext()){
+        	 * 	   messageAndOffset = iter.next();
+        	 * }
+        	 */
             if (!messageAndOffset.message.isValid()) {
                 throw new InvalidMessageException();
             }
@@ -236,14 +244,17 @@ public class Log implements ILog {
         validByteBuffer.limit((int) messageSetValidBytes);
         ByteBufferMessageSet validMessages = new ByteBufferMessageSet(validByteBuffer);
 
-        // they are valid, insert them in the log
+        /***
+         * 注意这里：
+         * 1. 写文件（磁盘缓存）时的lock
+         * 2. 写入的数据还是ByteBuffer内的数据，而非解压缩后的数据。存入磁盘后的压缩(多条)数据在消费时是怎么一条条消费呢?    
+         */
         synchronized (lock) {
             try {
                 LogSegment lastSegment = segments.getLastView();
                 
                 //注意这里的 fileMessageSet.append(byteBufferMessageSet)
                 long[] writtenAndOffset = lastSegment.getMessageSet().append(validMessages);
-                
                 
                 if (logger.isTraceEnabled()) {
                     logger.trace(String.format("[%s,%s] save %d messages, bytes %d", name, lastSegment.getName(),

@@ -172,7 +172,9 @@ public class Processor extends AbstractServerThread {
     }
 
     private void read(SelectionKey key) throws IOException {
+    	//Returns the channel for which this key was created
         SocketChannel socketChannel = channelFor(key);
+        
         Receive request = null;
         if (key.attachment() == null) {
         	//第一次读取数据
@@ -192,13 +194,15 @@ public class Processor extends AbstractServerThread {
         //=====================================================
         
         stats.recordBytesRead(read);
-        if (read < 0) {
+        if (read < 0) {//
         	//没有消息数据
         	/***
         	 * leo TODO  为什么要不断的close();长连接岂不是更好？！ --> 正常情况下read socket channel是有数据的，若read == -1，即Socket has likely been closed，所以这里也主动关闭下
         	 * 
         	 * 1. 有read ready,却读不到数据，应该是异常情况，所以close?!
-        	 * 2. 传递数据多情况下，最后一次读完后的状体。也要close?!
+        	 * 2. 传递数据多情况下，最后一次读完后的状体。也要close?! 
+        	 * 
+        	 * (正常读完下应该 read==0 ???)
         	 * 
         	 */
             close(key);

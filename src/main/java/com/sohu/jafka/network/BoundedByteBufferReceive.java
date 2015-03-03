@@ -72,7 +72,10 @@ public class BoundedByteBufferReceive extends AbstractTransmission implements Re
             }
             contentBuffer = byteBufferAllocate(size);
         }
-        //
+        /** 
+         *  1. 第一次读socket内的数据
+         *  2. 上此数据还没读完整，接着从socket内读数据
+         */
         if (contentBuffer != null) {
             read = Utils.read(channel, contentBuffer);
             //

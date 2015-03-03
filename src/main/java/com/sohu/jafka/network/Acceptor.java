@@ -88,8 +88,9 @@ class Acceptor extends AbstractServerThread {
                 try {
                     SelectionKey key = iter.next();
                     iter.remove();
-                    //
+                    
                     if(key.isAcceptable()) {
+                    	// 轮转的方式 将socket channel交于processor处理
                         accept(key,processors[currentProcessor]);
                     }else {
                         throw new IllegalStateException("Unrecognized key state for acceptor thread.");
@@ -99,7 +100,7 @@ class Acceptor extends AbstractServerThread {
                 } catch (Throwable t) {
                     logger.error("Error in acceptor",t);
                 }
-            }
+        }
         //run over
         logger.info("Closing server socket and selector.");
         Closer.closeQuietly(serverChannel, logger);
@@ -109,7 +110,9 @@ class Acceptor extends AbstractServerThread {
 
    
     private void accept(SelectionKey key, Processor processor) throws IOException{
+    	//Returns the channel for which this key was created
         ServerSocketChannel serverSocketChannel = (ServerSocketChannel) key.channel();
+        
         serverSocketChannel.socket().setReceiveBufferSize(receiveBufferSize);
         //
         SocketChannel socketChannel = serverSocketChannel.accept();

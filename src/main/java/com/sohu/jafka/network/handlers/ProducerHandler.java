@@ -45,7 +45,6 @@ public class ProducerHandler extends AbstractHandler {
     public Send handler(RequestKeys requestType, Receive receive) {
         final long st = System.currentTimeMillis();
         
-        
         ProducerRequest request = ProducerRequest.readFrom(receive.buffer());
         if (logger.isDebugEnabled()) {
             logger.debug("Producer request " + request.toString());
@@ -75,6 +74,8 @@ public class ProducerHandler extends AbstractHandler {
              * 		   是和 从client socket读入后形成的byte buffer是同一内存buffer
              * 
              * 即： 从socket channel 最终到 file channel时，只有一次byte buffer的复制！！！
+             * 
+             * 但为啥不利用fileChannel.transferFrom(socketChannel)直接写文件？？？数据量较多？数据需要分析（根据size读数据量）且不是全部写，只写content部分？
              */
             log.append(request.messages);
           //=================================================
